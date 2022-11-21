@@ -100,5 +100,11 @@ func NewGameFromRow(row *html.Node) (*Game, error) {
 		t = time.Date(t.Year()+1, t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, EST)
 	}
 
-	return &Game{Id: -1, Tipoff: t, Opponent: versus, IsHome: isHome}, nil
+	return &Game{
+		Id:         -1,
+		Tipoff:     t,
+		Opponent:   versus,
+		IsHome:     isHome,
+		UnixTipoff: t.Unix(),
+	}, nil
 }
