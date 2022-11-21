@@ -1,7 +1,6 @@
 package nbascrape
 
 import (
-	"database/sql"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,12 +9,13 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
 	SQLITE_FILENAME string
-	db              *sql.DB
+	dbx             *sqlx.DB
 )
 
 func init() {
@@ -38,17 +38,17 @@ func init() {
 }
 
 // Get a pointer to the database handle used by the application
-func GetDatabase() *sql.DB {
-	if db == nil {
-		db, _ = sql.Open("sqlite3", SQLITE_FILENAME)
+func GetDatabase() *sqlx.DB {
+	if dbx == nil {
+		dbx, _ = sqlx.Connect("sqlite3", SQLITE_FILENAME)
 	}
-	return db
+	return dbx
 }
 
 // Runs migrations to properly configure sql database
-func CreateTables() error {
+func Migrate() error {
 	database := GetDatabase()
-	driver, err := sqlite.WithInstance(database, &sqlite.Config{})
+	driver, err := sqlite.WithInstance(database.DB, &sqlite.Config{})
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,9 @@ func CreateTables() error {
 		return err
 	}
 	log.Println("Running migration.")
-	m.Up()
+	if err = m.Up(); err != nil {
+		return err
+	}
 	log.Println("Done.")
 
 	return nil
@@ -66,13 +68,11 @@ func CreateTables() error {
 
 // Inserts a Game into the database
 func InsertGame(g *Game) error {
-	sql := `
-INSERT INTO
-  "games" ("tipoff", "opponent", "is_home", "team_id")
-VALUES ($1, $2, $3, $4)
-RETURNING id;`
-
-	row := db.QueryRow(sql, g.Tipoff.UTC().Unix(), g.Opponent, g.IsHome, g.TeamId)
+	sql := `INSERT INTO games
+				("tipoff", "opponent", "is_home", "team_id")
+				VALUES ($1, $2, $3, $4)
+				RETURNING id;`
+	row := dbx.QueryRow(sql, g.Tipoff.UTC().Unix(), g.Opponent, g.IsHome, g.TeamId)
 	if err := row.Err(); err != nil {
 		return err
 	}
@@ -81,127 +81,85 @@ RETURNING id;`
 	return row.Scan(&id)
 }
 
-// Scanner is a generic Interface for scanning items from objects returned for
-// the sql database
-type Scanner interface {
-	Scan(dest ...any) error
-}
-
-// ScanGame returns a *Game from a *sql.Row or *sql.Rows
-func ScanGame(s Scanner) (*Game, error) {
+// GetGame returns a game given that game's id
+func GetGame(id int) (*Game, error) {
 	g := Game{}
-
-	err := s.Scan(&g.Id, &g.TeamId, &g.UnixTipoff, &g.Opponent, &g.IsHome)
+	err := dbx.Get(&g, "SELECT * FROM games WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
 	g.Tipoff = time.Unix(g.UnixTipoff, 0)
-
 	return &g, nil
-}
-
-// GetGame returns a game given that game's id
-func GetGame(id int) (*Game, error) {
-	row := db.QueryRow("SELECT * FROM games WHERE id = $1", id)
-	if err := row.Err(); err != nil {
-		return nil, err
-	}
-
-	if row == nil {
-		return nil, nil
-	}
-
-	g, err := ScanGame(row)
-	if err != nil {
-		return nil, err
-	}
-
-	return g, nil
 }
 
 // GetGames returns all games in the database
 func GetGames() ([]*Game, error) {
-	rows, err := db.Query("SELECT * FROM games")
+	games := make([]*Game, 0, NumberOfGames)
+	rows, err := dbx.Queryx("SELECT * FROM games")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	games := make([]*Game, 0, NumberOfGames*NumberOfTeams/2)
+	g := Game{}
 	for rows.Next() {
-		g, err := ScanGame(rows)
+		err := rows.StructScan(&g)
 		if err != nil {
-			return nil, nil
+			return nil, err
 		}
-		games = append(games, g)
+		g.Tipoff = time.Unix(g.UnixTipoff, 0)
+		games = append(games, &g)
 	}
-
 	return games, nil
 }
 
 // GetGamesForTeam returns all games for a team given that team's id
 func GetGamesForTeam(teamId int) ([]*Game, error) {
-	rows, err := db.Query("SELECT * FROM games WHERE team_id = $1", teamId)
+	games := make([]*Game, 0, NumberOfGames)
+	rows, err := dbx.Queryx("SELECT * FROM games WHERE team_id = $1", teamId)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	games := make([]*Game, 0, 82)
+	g := Game{}
 	for rows.Next() {
-		g, err := ScanGame(rows)
+		err = rows.StructScan(&g)
 		if err != nil {
 			return nil, err
 		}
-
-		games = append(games, g)
+		games = append(games, &g)
 	}
 
 	return games, nil
 }
 
-// ScanTeam returns a team given a *sql.Row or *sql.Rows
-func ScanTeam(s Scanner) (*Team, error) {
-	var t Team
-	err := s.Scan(&t.Id, &t.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	return &t, err
-}
-
 // GetTeam selects a team from the database given that team's id
 func GetTeam(id int) (*Team, error) {
-	row := GetDatabase().QueryRow("SELECT * FROM teams WHERE id = $1", id)
-	if err := row.Err(); err != nil {
-		return nil, err
-	}
-
-	t, err := ScanTeam(row)
+	t := Team{}
+	err := dbx.Get(&t, "SELECT * FROM teams WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
-	return t, nil
+
+	return &t, nil
 }
 
 // AllTeams selects all teams from the database
 func AllTeams() ([]*Team, error) {
-	db := GetDatabase()
-	rows, err := db.Query("SELECT * FROM teams")
+	// return allTeams, nil
+	ts := make([]*Team, 0, NumberOfTeams)
+	rows, err := dbx.Queryx("SELECT * FROM teams")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	allTeams := make([]*Team, 0, 30)
+	t := Team{}
 	for rows.Next() {
-		t, err := ScanTeam(rows)
+		err := rows.StructScan(&t)
 		if err != nil {
 			return nil, err
 		}
-		allTeams = append(allTeams, t)
+		ts = append(ts, &t)
 	}
 
-	return allTeams, nil
+	return ts, nil
 }

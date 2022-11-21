@@ -29,12 +29,12 @@ func init() {
 }
 
 type Game struct {
-	Id         int       `json:"id"`
-	Opponent   string    `json:"opponent"`
-	Tipoff     time.Time `json:"tipoff"`
-	IsHome     bool      `json:"is_home"`
-	TeamId     int       `json:"team_id"`
-	UnixTipoff int64     `json:"-"`
+	Id         int       `json:"id" db:"id"`
+	Opponent   string    `json:"opponent" db:"opponent"`
+	Tipoff     time.Time `json:"tipoff" db:"-"`
+	IsHome     bool      `json:"is_home" db:"is_home"`
+	TeamId     int       `json:"team_id" db:"team_id"`
+	UnixTipoff int64     `json:"-" db:"tipoff"`
 }
 
 func NewGameFromRow(row *html.Node) (*Game, error) {

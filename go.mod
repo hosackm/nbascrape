@@ -6,6 +6,7 @@ require (
 	github.com/antchfx/htmlquery v1.2.5
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/gorilla/mux v1.8.0
+	github.com/jmoiron/sqlx v1.3.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/spf13/cobra v1.6.1
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f

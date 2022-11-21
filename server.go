@@ -1,7 +1,6 @@
 package nbascrape
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,11 +8,12 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 )
 
 type Server struct {
 	R  *mux.Router
-	DB *sql.DB
+	DB *sqlx.DB
 }
 
 func JSONMiddleware(next http.Handler) http.Handler {

@@ -54,40 +54,9 @@ var migrateCmd = &cobra.Command{
 	Short: "Migrate database to most recent migration.",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		err := nbascrape.CreateTables()
+		err := nbascrape.Migrate()
 		if err != nil {
 			log.Fatal(err)
-		}
-	},
-}
-
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List entries in the database.",
-	Run: func(cmd *cobra.Command, args []string) {
-		db := nbascrape.GetDatabase()
-
-		rows, err := db.Query("SELECT * FROM teams")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for rows.Next() {
-			var team nbascrape.Team
-			err := rows.Scan(&team.Id, &team.Name)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Printf("Team [%d]: %s\n", team.Id, team.Name)
-		}
-
-		games, err := nbascrape.GetGames()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, g := range games {
-			log.Printf("    Game: %#v\n", g)
 		}
 	},
 }
@@ -200,7 +169,6 @@ func main() {
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(dbCmd)
 	rootCmd.AddCommand(scrapeCmd)
-	dbCmd.AddCommand(listCmd)
 	dbCmd.AddCommand(migrateCmd)
 	rootCmd.Execute()
 }
