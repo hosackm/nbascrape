@@ -37,6 +37,7 @@ func init() {
 	SQLITE_FILENAME = filepath.Join(dir, "nbascrape.db")
 }
 
+// Get a pointer to the database handle used by the application
 func GetDatabase() *sql.DB {
 	if db == nil {
 		db, _ = sql.Open("sqlite3", SQLITE_FILENAME)
@@ -44,6 +45,7 @@ func GetDatabase() *sql.DB {
 	return db
 }
 
+// Runs migrations to properly configure sql database
 func CreateTables() error {
 	database := GetDatabase()
 	driver, err := sqlite.WithInstance(database, &sqlite.Config{})
@@ -62,6 +64,7 @@ func CreateTables() error {
 	return nil
 }
 
+// Inserts a Game into the database
 func InsertGame(g *Game) error {
 	sql := `
 INSERT INTO
@@ -78,10 +81,13 @@ RETURNING id;`
 	return row.Scan(&id)
 }
 
+// Scanner is a generic Interface for scanning items from objects returned for
+// the sql database
 type Scanner interface {
 	Scan(dest ...any) error
 }
 
+// ScanGame returns a *Game from a *sql.Row or *sql.Rows
 func ScanGame(s Scanner) (*Game, error) {
 	g := Game{}
 
@@ -94,6 +100,7 @@ func ScanGame(s Scanner) (*Game, error) {
 	return &g, nil
 }
 
+// GetGame returns a game given that game's id
 func GetGame(id int) (*Game, error) {
 	row := db.QueryRow("SELECT * FROM games WHERE id = $1", id)
 	if err := row.Err(); err != nil {
@@ -112,6 +119,7 @@ func GetGame(id int) (*Game, error) {
 	return g, nil
 }
 
+// GetGames returns all games in the database
 func GetGames() ([]*Game, error) {
 	rows, err := db.Query("SELECT * FROM games")
 	if err != nil {
@@ -119,7 +127,7 @@ func GetGames() ([]*Game, error) {
 	}
 	defer rows.Close()
 
-	games := make([]*Game, 0, 82*30)
+	games := make([]*Game, 0, NumberOfGames*NumberOfTeams/2)
 	for rows.Next() {
 		g, err := ScanGame(rows)
 		if err != nil {
@@ -131,6 +139,7 @@ func GetGames() ([]*Game, error) {
 	return games, nil
 }
 
+// GetGamesForTeam returns all games for a team given that team's id
 func GetGamesForTeam(teamId int) ([]*Game, error) {
 	rows, err := db.Query("SELECT * FROM games WHERE team_id = $1", teamId)
 	if err != nil {
@@ -149,4 +158,50 @@ func GetGamesForTeam(teamId int) ([]*Game, error) {
 	}
 
 	return games, nil
+}
+
+// ScanTeam returns a team given a *sql.Row or *sql.Rows
+func ScanTeam(s Scanner) (*Team, error) {
+	var t Team
+	err := s.Scan(&t.Id, &t.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &t, err
+}
+
+// GetTeam selects a team from the database given that team's id
+func GetTeam(id int) (*Team, error) {
+	row := GetDatabase().QueryRow("SELECT * FROM teams WHERE id = $1", id)
+	if err := row.Err(); err != nil {
+		return nil, err
+	}
+
+	t, err := ScanTeam(row)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// AllTeams selects all teams from the database
+func AllTeams() ([]*Team, error) {
+	db := GetDatabase()
+	rows, err := db.Query("SELECT * FROM teams")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	allTeams := make([]*Team, 0, 30)
+	for rows.Next() {
+		t, err := ScanTeam(rows)
+		if err != nil {
+			return nil, err
+		}
+		allTeams = append(allTeams, t)
+	}
+
+	return allTeams, nil
 }

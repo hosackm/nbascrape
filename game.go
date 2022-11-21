@@ -19,6 +19,10 @@ var (
 	SeasonEnd   = time.Date(2023, 4, 9, 0, 0, 0, 0, time.UTC)
 )
 
+const (
+	NumberOfGames = 82
+)
+
 func init() {
 	EST, _ = time.LoadLocation("EST")
 	CET, _ = time.LoadLocation("CET")

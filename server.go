@@ -100,16 +100,13 @@ func (s Server) HandleTeamRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := s.DB.QueryRow("SELECT * FROM TEAMS WHERE id = $1", id)
-	if err = row.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	t, err := GetTeam(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var team Team
-	row.Scan(&team.Id, &team.Name)
-
-	json.NewEncoder(w).Encode(team)
+	json.NewEncoder(w).Encode(t)
 }
 
 func (s Server) HandleTeamGamesRequest(w http.ResponseWriter, r *http.Request) {
