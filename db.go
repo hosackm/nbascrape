@@ -35,6 +35,7 @@ func init() {
 	}
 
 	SQLITE_FILENAME = filepath.Join(dir, "nbascrape.db")
+	GetDatabase()
 }
 
 // Get a pointer to the database handle used by the application
@@ -93,13 +94,14 @@ func GetGame(id int) (*Game, error) {
 }
 
 // GetGames returns all games in the database
-func GetGames() ([]*Game, error) {
-	games := make([]*Game, 0, NumberOfGames)
+func GetGames() ([]Game, error) {
+	games := make([]Game, NumberOfGames*NumberOfTeams)
 	rows, err := dbx.Queryx("SELECT * FROM games")
 	if err != nil {
 		return nil, err
 	}
 
+	i := 0
 	g := Game{}
 	for rows.Next() {
 		err := rows.StructScan(&g)
@@ -107,26 +109,30 @@ func GetGames() ([]*Game, error) {
 			return nil, err
 		}
 		g.Tipoff = time.Unix(g.UnixTipoff, 0)
-		games = append(games, &g)
+		games[i] = g
+		i++
 	}
 	return games, nil
 }
 
 // GetGamesForTeam returns all games for a team given that team's id
-func GetGamesForTeam(teamId int) ([]*Game, error) {
-	games := make([]*Game, 0, NumberOfGames)
+func GetGamesForTeam(teamId int) ([]Game, error) {
+	games := make([]Game, NumberOfGames)
 	rows, err := dbx.Queryx("SELECT * FROM games WHERE team_id = $1", teamId)
 	if err != nil {
 		return nil, err
 	}
 
+	i := 0
 	g := Game{}
 	for rows.Next() {
 		err = rows.StructScan(&g)
 		if err != nil {
 			return nil, err
 		}
-		games = append(games, &g)
+		g.Tipoff = time.Unix(g.UnixTipoff, 0)
+		games[i] = g
+		i++
 	}
 
 	return games, nil
@@ -144,9 +150,8 @@ func GetTeam(id int) (*Team, error) {
 }
 
 // AllTeams selects all teams from the database
-func AllTeams() ([]*Team, error) {
-	// return allTeams, nil
-	ts := make([]*Team, 0, NumberOfTeams)
+func AllTeams() ([]Team, error) {
+	ts := make([]Team, 0, NumberOfTeams)
 	rows, err := dbx.Queryx("SELECT * FROM teams")
 	if err != nil {
 		return nil, err
@@ -158,7 +163,7 @@ func AllTeams() ([]*Team, error) {
 		if err != nil {
 			return nil, err
 		}
-		ts = append(ts, &t)
+		ts = append(ts, t)
 	}
 
 	return ts, nil

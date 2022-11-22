@@ -8,12 +8,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/jmoiron/sqlx"
 )
 
 type Server struct {
-	R  *mux.Router
-	DB *sqlx.DB
+	R *mux.Router
 }
 
 func JSONMiddleware(next http.Handler) http.Handler {
@@ -75,7 +73,7 @@ func (s Server) HandleGamesRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(struct {
-		Games []*Game `json:"games"`
+		Games []Game `json:"games"`
 	}{allGames})
 }
 
@@ -86,11 +84,9 @@ func (s Server) HandleTeamsRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type TeamsResponse struct {
-		Teams []*Team `json:"teams"`
-	}
-
-	json.NewEncoder(w).Encode(TeamsResponse{Teams: allTeams})
+	json.NewEncoder(w).Encode(struct {
+		Teams []Team `json:"teams"`
+	}{allTeams})
 }
 
 func (s Server) HandleTeamRequest(w http.ResponseWriter, r *http.Request) {
@@ -121,12 +117,11 @@ func (s Server) HandleTeamGamesRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var team Team
-	row := s.DB.QueryRow("SELECT * FROM teams WHERE id = $1", tid)
-	if err = row.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	t, err := GetTeam(tid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	row.Scan(&team.Id, &team.Name)
 
 	games, err := GetGamesForTeam(tid)
 	if err != nil {
@@ -134,14 +129,15 @@ func (s Server) HandleTeamGamesRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// convert timezone
-	for i, _ := range games {
+	for i := range games {
 		games[i].Tipoff = games[i].Tipoff.In(loc)
 	}
 
 	json.NewEncoder(w).Encode(struct {
-		TeamData Team    `json:"team"`
-		Games    []*Game `json:"games"`
-	}{team, games})
+		TeamData *Team  `json:"team"`
+		Games    []Game `json:"games"`
+	}{t, games})
+	json.NewEncoder(w).Encode(games)
 }
 
 func (s Server) Error(w http.ResponseWriter, err string, code int) {
@@ -150,7 +146,7 @@ func (s Server) Error(w http.ResponseWriter, err string, code int) {
 }
 
 func NewServer() *Server {
-	s := &Server{R: mux.NewRouter(), DB: GetDatabase()}
+	s := &Server{R: mux.NewRouter()}
 	s.R.Use(JSONMiddleware)
 	s.R.HandleFunc("/games", s.HandleGamesRequest)
 	s.R.HandleFunc("/games/{id:[0-9]+}", s.HandleGameRequest)
